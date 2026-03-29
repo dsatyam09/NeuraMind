@@ -35,9 +35,39 @@ struct ReportData {
 
     var formattedDuration: String { formatMinutes(totalRecordedSeconds / 60) }
 
-    var avgSessionMinutes: Double {
-        guard !summaries.isEmpty else { return 0 }
-        return (totalRecordedSeconds / 60) / Double(summaries.count)
+    // MARK: Work periods
+    //
+    // Summaries are ~1-minute chunks saved by the summarization engine.
+    // A "work period" = run of consecutive summaries where the gap between
+    // any two adjacent ones is < 5 minutes (300s). Gaps larger than that
+    // are breaks or the end of a sitting.
+
+    var workPeriods: [[SummaryRecord]] {
+        let sorted = summaries.sorted { $0.startTimestamp < $1.startTimestamp }
+        guard !sorted.isEmpty else { return [] }
+        var periods: [[SummaryRecord]] = []
+        var current = [sorted[0]]
+        for i in 1..<sorted.count {
+            if sorted[i].startTimestamp - sorted[i - 1].endTimestamp < 300 {
+                current.append(sorted[i])
+            } else {
+                periods.append(current)
+                current = [sorted[i]]
+            }
+        }
+        periods.append(current)
+        return periods
+    }
+
+    /// Average duration of a continuous work period (minutes).
+    var avgWorkPeriodMinutes: Double {
+        let periods = workPeriods
+        guard !periods.isEmpty else { return 0 }
+        let durations = periods.compactMap { p -> Double? in
+            guard let first = p.first, let last = p.last else { return nil }
+            return (last.endTimestamp - first.startTimestamp) / 60
+        }
+        return durations.isEmpty ? 0 : durations.reduce(0, +) / Double(durations.count)
     }
 
     var medicationDayCounts: (on: Int, off: Int) {
@@ -107,19 +137,22 @@ struct ReportData {
         return times.sorted { $0.value > $1.value }.map { ($0.key, $0.value) }
     }
 
-    // MARK: Context switch rate (primary app changes per active hour)
+    // MARK: Context switch rate
     //
-    // Counts every transition where the dominant app changes between consecutive
-    // summaries, divided by total active recorded time.
-    // Dominant app = the app that appears most in a summary's appNames list.
+    // Counts dominant-app changes between adjacent summaries within the same
+    // work period only. Transitions at the boundary between two work periods
+    // (i.e. after a 5+ min break) are NOT counted — resuming work in a
+    // different app after lunch is not a context switch.
+    // Divided by total active recorded time (sum of summary durations).
 
     var switchesPerHour: Double {
-        let sorted = summaries.sorted { $0.startTimestamp < $1.startTimestamp }
         var switches = 0
-        for i in 1..<sorted.count {
-            let prev = dominantApp(of: sorted[i - 1])
-            let curr = dominantApp(of: sorted[i])
-            if !prev.isEmpty && !curr.isEmpty && prev != curr { switches += 1 }
+        for period in workPeriods {
+            for i in 1..<period.count {
+                let prev = dominantApp(of: period[i - 1])
+                let curr = dominantApp(of: period[i])
+                if !prev.isEmpty && !curr.isEmpty && prev != curr { switches += 1 }
+            }
         }
         let hours = totalRecordedSeconds / 3600
         return hours > 0 ? Double(switches) / hours : 0
@@ -287,8 +320,8 @@ enum ReportEngine {
         return """
         PERIOD: \(data.formatDay(data.from)) – \(data.formatDay(data.to))
         TOTAL SESSIONS: \(data.summaries.count) | TOTAL TIME: \(data.formattedDuration)
-        AVG SESSION: \(String(format: "%.1f", data.avgSessionMinutes)) min | FOCUS BLOCKS (≥15 min): \(data.focusBlocks.count)
-        APP SWITCHES/HOUR: \(String(format: "%.1f", data.switchesPerHour))
+        AVG WORK PERIOD: \(String(format: "%.0f", data.avgWorkPeriodMinutes)) min | FOCUS BLOCKS (≥15 min): \(data.focusBlocks.count)
+        APP SWITCHES/HOUR (within work periods): \(String(format: "%.1f", data.switchesPerHour))
         MEDICATION: \(medStr)
         ACTIVITY BREAKDOWN: \(actLines.isEmpty ? "not available" : actLines)
 
@@ -345,10 +378,6 @@ struct MedicalReportView: View {
             rule
             if !data.focusBlocks.isEmpty {
                 focusBlocksSection
-                rule
-            }
-            if !data.appTimes.isEmpty {
-                appUsageSection
                 rule
             }
             dailyBreakdownSection
@@ -439,31 +468,34 @@ struct MedicalReportView: View {
     private var statsAtAGlance: some View {
         VStack(alignment: .leading, spacing: 10) {
             sectionLabel("STATISTICS")
-            LazyVGrid(
-                columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: 3),
-                spacing: 10
-            ) {
-                statCell("Total sessions",     value: "\(data.summaries.count)")
-                statCell("Total time",          value: data.formattedDuration)
-                statCell("Avg session",         value: String(format: "%.1f min", data.avgSessionMinutes))
-                statCell("Focus blocks (≥15m)", value: "\(data.focusBlocks.count)")
-                statCell("Switches / hour",     value: String(format: "%.1f", data.switchesPerHour))
-                if !data.activityBreakdown.isEmpty {
-                    statCell("Top activity", value: data.activityBreakdown.first?.type ?? "—")
-                }
+            HStack(spacing: 10) {
+                statCell("Focus blocks (≥15m)",
+                         value: "\(data.focusBlocks.count)",
+                         detail: "sustained periods")
+                statCell("Avg work period",
+                         value: String(format: "%.0f min", data.avgWorkPeriodMinutes),
+                         detail: "before a 5+ min break")
+                statCell("Switches / hour",
+                         value: String(format: "%.1f", data.switchesPerHour),
+                         detail: "within work periods")
             }
         }
         .padding(.vertical, 14)
     }
 
     @ViewBuilder
-    private func statCell(_ label: String, value: String) -> some View {
+    private func statCell(_ label: String, value: String, detail: String = "") -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(value)
-                .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                .font(.system(size: 17, weight: .semibold, design: .monospaced))
             Text(label)
-                .font(.system(size: 9))
-                .foregroundStyle(Color(white: 0.5))
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(Color(white: 0.3))
+            if !detail.isEmpty {
+                Text(detail)
+                    .font(.system(size: 9))
+                    .foregroundStyle(Color(white: 0.55))
+            }
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
