@@ -5,40 +5,36 @@ import Observation
 // MARK: - Window Snapshot
 
 struct FocusWindowSnapshot: Equatable, Sendable {
-    let windowID: CGWindowID
     let frame: CGRect
     let ownerPID: pid_t
     let ownerName: String
     let windowName: String
     let displayID: CGDirectDisplayID
 
-    static func fromCGWindowInfo(_ info: [String: Any]) -> FocusWindowSnapshot? {
-        guard let windowID = info[kCGWindowNumber as String] as? CGWindowID,
-              let boundsDict = info[kCGWindowBounds as String] as? [String: Any],
-              let ownerPID = info[kCGWindowOwnerPID as String] as? pid_t,
-              let ownerName = info[kCGWindowOwnerName as String] as? String
-        else { return nil }
-
-        guard let x = boundsDict["X"] as? CGFloat,
-              let y = boundsDict["Y"] as? CGFloat,
-              let w = boundsDict["Width"] as? CGFloat,
-              let h = boundsDict["Height"] as? CGFloat
-        else { return nil }
-
-        let frame = CGRect(x: x, y: y, width: w, height: h)
-        let windowName = info[kCGWindowName as String] as? String ?? ""
-
+    static func fromFocusedFrame(
+        _ frame: CGRect,
+        ownerPID: pid_t,
+        ownerName: String,
+        windowName: String = ""
+    ) -> FocusWindowSnapshot {
         let center = CGPoint(x: frame.midX, y: frame.midY)
+        let displayID = displayID(containing: center)
+        return FocusWindowSnapshot(
+            frame: frame,
+            ownerPID: ownerPID,
+            ownerName: ownerName,
+            windowName: windowName,
+            displayID: displayID
+        )
+    }
+
+    private static func displayID(containing point: CGPoint) -> CGDirectDisplayID {
         var displayCount: UInt32 = 0
         var matchedDisplay: CGDirectDisplayID = CGMainDisplayID()
         var displayIDs = [CGDirectDisplayID](repeating: 0, count: 8)
-        CGGetDisplaysWithPoint(center, 8, &displayIDs, &displayCount)
+        CGGetDisplaysWithPoint(point, 8, &displayIDs, &displayCount)
         if displayCount > 0 { matchedDisplay = displayIDs[0] }
-
-        return FocusWindowSnapshot(
-            windowID: windowID, frame: frame, ownerPID: ownerPID,
-            ownerName: ownerName, windowName: windowName, displayID: matchedDisplay
-        )
+        return matchedDisplay
     }
 }
 
@@ -242,38 +238,17 @@ final class FocusOverlayPoller {
             lastFrontmostPID = pid
         }
 
-        let axFrame = OverlayAccessibilityBridge.focusedWindowFrame(for: pid)
-
-        let windowListInfo = CGWindowListCopyWindowInfo(
-            [.optionOnScreenOnly, .excludeDesktopElements],
-            kCGNullWindowID
-        ) as? [[String: Any]] ?? []
-
-        let appWindows = windowListInfo.compactMap { info -> FocusWindowSnapshot? in
-            guard let snapshot = FocusWindowSnapshot.fromCGWindowInfo(info),
-                  snapshot.ownerPID == pid else { return nil }
-            guard snapshot.frame.width > 50 && snapshot.frame.height > 50 else { return nil }
-            return snapshot
-        }
-
-        if let axFrame = axFrame {
-            let matched = appWindows.first { s in
-                abs(s.frame.origin.x - axFrame.origin.x) < 5
-                && abs(s.frame.origin.y - axFrame.origin.y) < 5
-                && abs(s.frame.width - axFrame.width) < 5
-                && abs(s.frame.height - axFrame.height) < 5
-            }
-            let best = matched.map {
-                FocusWindowSnapshot(
-                    windowID: $0.windowID, frame: axFrame,
-                    ownerPID: $0.ownerPID, ownerName: $0.ownerName,
-                    windowName: $0.windowName, displayID: $0.displayID
-                )
-            } ?? appWindows.first
-            let result = best.map { [$0] } ?? []
+        if let axFrame = OverlayAccessibilityBridge.focusedWindowFrame(for: pid),
+           axFrame.width > 50,
+           axFrame.height > 50 {
+            let ownerName = frontApp.localizedName ?? "Unknown"
+            let snapshot = FocusWindowSnapshot.fromFocusedFrame(
+                axFrame,
+                ownerPID: pid,
+                ownerName: ownerName
+            )
+            let result = [snapshot]
             if result != focusedSnapshots { focusedSnapshots = result }
-        } else if let first = appWindows.first {
-            if focusedSnapshots != [first] { focusedSnapshots = [first] }
         } else {
             if !focusedSnapshots.isEmpty { focusedSnapshots = [] }
         }

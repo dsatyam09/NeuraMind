@@ -116,7 +116,7 @@ final class FocusOverlayManager {
         notchEars.updateEffects(state: overlayState)
 
         // Check fullscreen: hide main overlays, show notch ears instead
-        let fsScreen = fullscreenScreen()
+        let fsScreen = fullscreenScreen(from: snapshots)
         if let fsScreen {
             if overlaysVisible {
                 for (_, entry) in overlays { entry.window.orderOut(nil) }
@@ -133,15 +133,13 @@ final class FocusOverlayManager {
 
         if focusChanged || !overlaysVisible {
             lastSnapshots = snapshots
-            let topWindowID = snapshots.first?.windowID
 
-            for (_, entry) in overlays {
-                if let wid = topWindowID {
-                    entry.window.orderBelow(windowNumber: Int(wid))
-                } else {
-                    entry.window.orderFrontRegardless()
-                }
-                entry.contentView.clearMask()
+            for (displayID, entry) in overlays {
+                let frames = snapshots
+                    .filter { $0.displayID == displayID }
+                    .map { $0.frame }
+                entry.contentView.applyMask(focusedFrames: frames)
+                entry.window.orderFrontRegardless()
             }
             overlaysVisible = true
         } else {
@@ -151,36 +149,20 @@ final class FocusOverlayManager {
         }
     }
 
-    private func fullscreenScreen() -> NSScreen? {
-        guard let frontApp = NSWorkspace.shared.frontmostApplication else { return nil }
-        let pid = frontApp.processIdentifier
-
-        let windowList = CGWindowListCopyWindowInfo(
-            [.optionOnScreenOnly, .excludeDesktopElements],
-            kCGNullWindowID
-        ) as? [[String: Any]] ?? []
-
-        for info in windowList {
-            guard let ownerPID = info[kCGWindowOwnerPID as String] as? pid_t,
-                  ownerPID == pid,
-                  let layer = info[kCGWindowLayer as String] as? Int,
-                  layer == 0,
-                  let bounds = info[kCGWindowBounds as String] as? [String: Any],
-                  let w = bounds["Width"] as? CGFloat,
-                  let h = bounds["Height"] as? CGFloat,
-                  let x = bounds["X"] as? CGFloat,
-                  let _ = bounds["Y"] as? CGFloat
-            else { continue }
-
-            for screen in NSScreen.screens {
-                let sf = screen.frame
-                let notchInset = screen.safeAreaInsets.top
-                let matchesFull = abs(h - sf.height) < 2
-                let matchesBelowNotch = notchInset > 0 && abs(h - (sf.height - notchInset)) < 2
-                let displayMatch = abs(w - sf.width) < 2
-                    && (matchesFull || matchesBelowNotch)
-                    && abs(x - sf.origin.x) < 2
-                if displayMatch { return screen }
+    private func fullscreenScreen(from snapshots: [FocusWindowSnapshot]) -> NSScreen? {
+        guard let snapshot = snapshots.first else { return nil }
+        for screen in NSScreen.screens where screen.displayID == snapshot.displayID {
+            let sf = screen.frame
+            let notchInset = screen.safeAreaInsets.top
+            let frame = snapshot.frame
+            let widthMatches = abs(frame.width - sf.width) < 2
+            let xMatches = abs(frame.origin.x - sf.origin.x) < 2
+            let fullHeightMatches = abs(frame.height - sf.height) < 2
+            let belowNotchMatches = notchInset > 0 && abs(frame.height - (sf.height - notchInset)) < 2
+            let yMatches = abs(frame.origin.y - sf.origin.y) < 2
+                || (notchInset > 0 && abs(frame.origin.y - (sf.origin.y + notchInset)) < 2)
+            if widthMatches && xMatches && yMatches && (fullHeightMatches || belowNotchMatches) {
+                return screen
             }
         }
         return nil

@@ -30,32 +30,17 @@ struct GlassCard<Content: View>: View {
     }
 
     var body: some View {
-        Group {
-            if #available(macOS 26, *) {
-                content
-                    .background(
-                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .fill(.white.opacity(isHovered ? hoverFillOpacity : baseFillOpacity))
-                    )
-                    .overlay { reflectiveGlassBorder }
-                    .overlay(alignment: .top) { clearGlassSheen }
-                    .shadow(
-                        color: .black.opacity(isHovered ? 0.12 : 0.08),
-                        radius: isHovered ? 18 : 14,
-                        y: 4
-                    )
-                    .glassEffect(
-                        .clear.interactive(),
-                        in: .rect(cornerRadius: cornerRadius)
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            } else {
-                content
-                    .background { cardBackdrop }
-                    .overlay { cardOutline }
-                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            }
-        }
+        content
+            .background { cardBackdrop }
+            .overlay { cardOutline }
+            .overlay(alignment: .top) { clearGlassSheen }
+            .overlay { reflectiveGlassBorder }
+            .shadow(
+                color: .black.opacity(isHovered ? 0.12 : 0.08),
+                radius: isHovered ? 18 : 14,
+                y: 4
+            )
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.15)) {
                 isHovered = hovering

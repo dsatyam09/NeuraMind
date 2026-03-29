@@ -15,7 +15,7 @@ final class FocusOverlayWindow: NSWindow {
     }
 
     private func configure() {
-        level = .normal
+        level = .statusBar
         collectionBehavior = [
             .canJoinAllSpaces,
             .stationary,

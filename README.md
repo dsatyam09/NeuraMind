@@ -1,12 +1,13 @@
-# AutoLog
+# NeuraMind
 
 Your screen, understood.
 
 ```bash
 # See installation instructions below
+brew install --cask NeuraMind
 ```
 
-AutoLog is a macOS menu bar app that watches what you do on your computer and builds a searchable activity knowledge graph from it. It captures your screen via OCR, infers what you're working on using an LLM, connects related activities across apps, and syncs everything to an Obsidian vault as linked notes.
+NeuraMind is a macOS menu bar app that watches what you do on your computer and builds a searchable activity knowledge graph from it. It captures your screen via OCR, infers what you're working on using an LLM, connects related activities across apps, and syncs everything to an Obsidian vault as linked notes.
 
 Think of it as ambient memory for your workday -- not a surveillance tool, but a personal context engine that remembers what you were doing, in which apps, with which files, so you never lose track.
 
@@ -39,7 +40,7 @@ Think of it as ambient memory for your workday -- not a surveillance tool, but a
 
 ## What it captures
 
-Every few seconds, AutoLog takes a screenshot, runs full-screen OCR, and extracts:
+Every few seconds, NeuraMind takes a screenshot, runs full-screen OCR, and extracts:
 
 - **Screen text** -- everything visible, not just the active window
 - **App metadata** -- which app is frontmost, its window title, document path, browser URL
@@ -54,12 +55,11 @@ screenshot --> OCR --> capture record --> summarization (Haiku) --> activity inf
                                          app sessions              knowledge graph
                                        (time per app)          (cross-activity links)
 ```
-
 ---
 
 ## Capture pipeline
 
-AutoLog uses a five-stage pipeline to turn screenshots into structured records efficiently.
+NeuraMind uses a five-stage pipeline to turn screenshots into structured records efficiently.
 
 ### Stage 1: Screenshot
 
@@ -91,7 +91,7 @@ Frame classification:
 | **DELTA** | < 50% pixel change, same app | Changed regions only |
 | **SKIP** | 0% change | None (triggers adaptive backoff) |
 
-This compression means AutoLog avoids redundant OCR when you're reading a static page -- it only processes what actually changed.
+This compression means NeuraMind avoids redundant OCR when you're reading a static page -- it only processes what actually changed.
 
 ### Stage 4: OCR
 
@@ -112,15 +112,15 @@ When SKIP frames are returned consecutively, the capture interval backs off expo
 
 ## The knowledge graph
 
-AutoLog doesn't just store flat summaries. It builds structure across four layers:
+NeuraMind doesn't just store flat summaries. It builds structure across four layers:
 
 **App Sessions** -- contiguous stretches of using one app, with aggregated metadata (all window titles, document paths, URLs seen during the session).
 
-**Activities** -- LLM-inferred tasks that span one or more app sessions. "Debugging the capture pipeline" might involve Terminal (building), Safari (reading docs), and Xcode (editing code) -- AutoLog groups these into one coherent activity with a human-readable name.
+**Activities** -- LLM-inferred tasks that span one or more app sessions. "Debugging the capture pipeline" might involve Terminal (building), Safari (reading docs), and Xcode (editing code) -- NeuraMind groups these into one coherent activity with a human-readable name.
 
 **Entities** -- files, URLs, and topics extracted from activities, queryable independently ("show me everything involving this file").
 
-**Cross-activity links** -- activities connected by shared files, URLs, or topics. If you edited `CaptureEngine.swift` in two different sessions hours apart, AutoLog links those two activities together so you can reconstruct your whole context.
+**Cross-activity links** -- activities connected by shared files, URLs, or topics. If you edited `CaptureEngine.swift` in two different sessions hours apart, NeuraMind links those two activities together so you can reconstruct your whole context.
 
 ### Activity inference
 
@@ -154,7 +154,7 @@ The enrichment panel lets you paste any prompt and get relevant screen context i
 
 **How it works:**
 1. You type or paste a prompt
-2. AutoLog runs a retrieval strategy against stored summaries and activities
+2. NeuraMind runs a retrieval strategy against stored summaries and activities
 3. Relevant context is appended as footnotes with citations
 4. You paste the enriched prompt into any chat interface
 
@@ -171,7 +171,7 @@ The two-pass strategy is more accurate for complex queries but slightly slower.
 
 ## Obsidian integration
 
-AutoLog syncs to an Obsidian vault with `[[wikilinks]]` so you can explore your work history in Obsidian's graph view.
+NeuraMind syncs to an Obsidian vault with `[[wikilinks]]` so you can explore your work history in Obsidian's graph view.
 
 ```bash
 # Sync last 4 hours to vault
@@ -215,10 +215,10 @@ python3 scripts/backfill_summaries.py
 
 ## Focus workflow
 
-AutoLog can also track declared focus blocks, not just passive activity. The model is:
+NeuraMind can also track declared focus blocks, not just passive activity. The model is:
 
 - **Emacs/Org owns intent** -- what you said you were trying to do
-- **AutoLog owns evidence** -- what apps, sessions, and artifacts actually happened
+- **NeuraMind owns evidence** -- what apps, sessions, and artifacts actually happened
 
 This creates a useful separation: planning lives in Org, but productivity and drift are judged from captured behavior.
 
@@ -231,7 +231,7 @@ Focus blocks are stored as small local files:
 - `~/org/today.org` -- daily dashboard
 - `~/org/neuramind-scorecard.org` -- review log
 
-When you start a block, Emacs writes the declared task, done condition, artifact goal, and drift budget. When you stop a block, AutoLog appends the finalized block to the log and writes a compact Org review entry to the scorecard.
+When you start a block, Emacs writes the declared task, done condition, artifact goal, and drift budget. When you stop a block, NeuraMind appends the finalized block to the log and writes a compact Org review entry to the scorecard.
 
 ### Emacs commands
 
@@ -299,7 +299,7 @@ Recent productivity is computed directly from focus-block history. The report tr
 
 ## Supporting scripts
 
-A set of Python scripts extend AutoLog with LLM-driven reflection and synthesis.
+A set of Python scripts extend NeuraMind with LLM-driven reflection and synthesis.
 
 ### Nightly digest (`scripts/nightly-digest.py`)
 
@@ -331,7 +331,7 @@ python3 scripts/mental-map.py
 
 ## Menu bar UI
 
-AutoLog lives entirely in the macOS menu bar. The icon reflects capture state:
+NeuraMind lives entirely in the macOS menu bar. The icon reflects capture state:
 
 | Icon | State |
 |------|-------|
@@ -380,7 +380,7 @@ First launch shows a permission grant flow:
 1. Screen Recording permission (required for screenshots)
 2. Accessibility permission (required for window titles and app metadata)
 
-AutoLog blocks capture until both permissions are granted, then proceeds automatically.
+NeuraMind blocks capture until both permissions are granted, then proceeds automatically.
 
 ---
 
@@ -448,7 +448,7 @@ GET  /docs                          -- interactive Scalar API docs
 
 ## LLM proxy
 
-`llm-proxy/` is a small Python HTTP server that wraps `claude -p` (Claude Code's headless CLI) and exposes it as an OpenAI-compatible chat completions endpoint. AutoLog uses this instead of calling the Anthropic API directly, so LLM calls stay local and go through your existing Claude Code auth.
+`llm-proxy/` is a small Python HTTP server that wraps `claude -p` (Claude Code's headless CLI) and exposes it as an OpenAI-compatible chat completions endpoint. NeuraMind uses this instead of calling the Anthropic API directly, so LLM calls stay local and go through your existing Claude Code auth.
 
 ### Features
 
@@ -467,7 +467,7 @@ pip install -e .
 python -m claude_proxy
 ```
 
-The proxy binds to `0.0.0.0` on a configurable port. Set `llmEndpointURL` in AutoLog settings to point at it.
+The proxy binds to `0.0.0.0` on a configurable port. Set `llmEndpointURL` in NeuraMind settings to point at it.
 
 ### Supported models
 
@@ -481,7 +481,7 @@ The proxy binds to `0.0.0.0` on a configurable port. Set `llmEndpointURL` in Aut
 
 ## MCP bridge
 
-`mcp-bridge/` is a FastMCP server that exposes the AutoLog HTTP API as MCP tools, so Claude Code can read your screen context directly in its context window.
+`mcp-bridge/` is a FastMCP server that exposes the NeuraMind HTTP API as MCP tools, so Claude Code can read your screen context directly in its context window.
 
 ### Setup
 
@@ -503,7 +503,7 @@ Add the MCP server to your Claude Code config to enable it.
 | `browse_by_time` | Retrieve summaries around a specific timestamp |
 | `query_entities` | Look up all activities involving a file, URL, or topic |
 | `get_focus_block` | Current active focus block and drift |
-| `health_check` | Verify AutoLog is running and reachable |
+| `health_check` | Verify NeuraMind is running and reachable |
 
 ---
 
@@ -543,14 +543,15 @@ swift build
 # Optimized release build
 make release
 
-# Create app bundle with icon and entitlements
+# Create a debug app bundle with icon and entitlements
 make bundle
 
-# Install to /Applications/AutoLog.app (preserves TCC permissions)
-make install-app
+# Create a release DMG for distribution / Homebrew cask work
+make dmg
 
-# Run directly
-make run
+# Install to /Applications/NeuraMind.app (preserves TCC permissions)
+open .build/NeuraMind.app
+
 ```
 
 Grant Accessibility permission when prompted on first launch. Screen Recording permission is requested via the onboarding flow.
@@ -572,7 +573,7 @@ pip install -e .
 python -m claude_proxy &
 ```
 
-Then set `llmEndpointURL` in AutoLog settings to `http://127.0.0.1:<port>/v1/chat/completions`.
+Then set `llmEndpointURL` in NeuraMind settings to `http://127.0.0.1:<port>/v1/chat/completions`.
 
 ### MCP bridge setup
 
@@ -600,7 +601,7 @@ Set up as a launchd agent for automatic hourly sync (plist templates in `launchd
 
 ## Configuration
 
-AutoLog uses `UserDefaults` for persistent configuration. All settings are exposed in the Settings window and can also be set via `defaults write`.
+NeuraMind uses `UserDefaults` for persistent configuration. All settings are exposed in the Settings window and can also be set via `defaults write`.
 
 | Setting | Default | What it controls |
 |---------|---------|-----------------|
@@ -610,7 +611,7 @@ AutoLog uses `UserDefaults` for persistent configuration. All settings are expos
 | `apiServerPort` | `21890` | Local API server port |
 | `hasCompletedOnboarding` | `false` | Whether the permission grant flow has been completed |
 
-Privacy exclusions (apps skipped during capture) are managed in the Privacy tab of Settings. Password managers and System Settings are excluded by default. AutoLog's own windows are always excluded.
+Privacy exclusions (apps skipped during capture) are managed in the Privacy tab of Settings. Password managers and System Settings are excluded by default. NeuraMind's own windows are always excluded.
 
 ---
 
@@ -620,7 +621,7 @@ Privacy exclusions (apps skipped during capture) are managed in the Privacy tab 
 
 | Service | Schedule | Purpose |
 |---------|----------|---------|
-| `com.contextd.app` | At login | AutoLog app itself |
+| `com.contextd.app` | At login | NeuraMind app itself |
 | `com.contextd.llm-proxy` | At login | LLM proxy server |
 | `com.contextd.obsidian-sync` | Hourly | Vault sync |
 | `com.contextd.nightly-digest` | Nightly | Haiku digest generation |
@@ -650,16 +651,12 @@ Nightly digest and daily reflection use Haiku and Opus respectively and run once
 
 - All data stays local (SQLite database in `~/Library/Application Support/NeuraMind/`)
 - Password managers and System Settings are excluded from capture by default
-- AutoLog's own windows are excluded from screenshots
+- NeuraMind's own windows are excluded from screenshots
 - LLM calls go through your local `claude -p` proxy -- no data sent to third-party APIs
 - Raw captures are pruned after 72 hours; summaries and activities persist indefinitely
 - No telemetry, no analytics, no network calls except to your local LLM proxy
 
----
 
-## Credits
-
-Forked from [thesophiaxu/contextd](https://github.com/thesophiaxu/contextd). Activity knowledge graph, enhanced OCR pipeline, Obsidian integration, LLM proxy, MCP bridge, focus workflow, and ScreenCaptureKit migration by [Amit Subhash](https://github.com/AmitSubhash).
 
 ## License
 

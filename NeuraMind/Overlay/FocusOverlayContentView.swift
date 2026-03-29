@@ -97,6 +97,21 @@ final class FocusOverlayContentView: NSView {
         CATransaction.commit()
     }
 
+    func applyMask(focusedFrames: [CGRect]) {
+        guard !focusedFrames.isEmpty else {
+            clearMask()
+            return
+        }
+        let localFrames = focusedFrames.map { frame in
+            MaskBuilder.convertToViewCoordinates(windowFrame: frame, screen: screen)
+        }
+        let mask = MaskBuilder.buildMask(overlayBounds: bounds, focusedFrames: localFrames)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer?.mask = mask
+        CATransaction.commit()
+    }
+
     func teardown() {
         grainRenderer?.stop()
     }

@@ -238,19 +238,10 @@ private struct GlassPanelView: View {
     @State private var isMedicated: Bool = false
 
     var body: some View {
-        if #available(macOS 26, *) {
-            GlassEffectContainer(spacing: 0) {
-                panelCards
-            }
+        panelCards
             .padding(14)
             .frame(width: 340)
             .onAppear { snapshotState() }
-        } else {
-            panelCards
-                .padding(14)
-                .frame(width: 340)
-                .onAppear { snapshotState() }
-        }
     }
 
     private var panelCards: some View {

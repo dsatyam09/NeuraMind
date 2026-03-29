@@ -286,7 +286,7 @@ actor SummarizationEngine {
             documentPaths: allDocPaths, browserURLs: allURLs, activityType: parsed.activityType,
             medicationActive: MedicationManager.currentState
         )
-        let inserted = try storageManager.insertSummary(record)
+        _ = try storageManager.insertSummary(record)
         try storageManager.markCapturesAsSummarized(ids: chunk.captureIds)
 
         // TF-IDF embeddings are computed lazily on first semantic search query
