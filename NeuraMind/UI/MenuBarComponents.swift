@@ -229,7 +229,6 @@ struct FocusStatusView: View {
 /// Shows capture speed picker and current interval status.
 struct IntervalIndicatorView: View {
     @ObservedObject var captureEngine: CaptureEngine
-    @AppStorage("contextRecoveryEnabled") private var contextRecoveryEnabled = false
 
     var body: some View {
         VStack(spacing: 6) {
@@ -255,18 +254,6 @@ struct IntervalIndicatorView: View {
             .padding(2)
             .background(.quaternary.opacity(0.5))
             .clipShape(RoundedRectangle(cornerRadius: 7))
-
-            // Context Recovery toggle
-            HStack(spacing: 4) {
-                Text("Context Recovery")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Toggle("", isOn: $contextRecoveryEnabled)
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
-                    .labelsHidden()
-            }
 
             // Current status line
             HStack(spacing: 4) {

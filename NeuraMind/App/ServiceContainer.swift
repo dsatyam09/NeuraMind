@@ -24,7 +24,6 @@ final class ServiceContainer {
     // Focus overlay
     let focusScoreEngine: FocusScoreEngine?
     let borderOverlayController: BorderOverlayWindowController?
-    let contextRecoveryEngine: ContextRecoveryEngine?
 
     // Phase 3.5 — Medication tracking
     let medicationManager: MedicationManager?
@@ -77,12 +76,6 @@ final class ServiceContainer {
             let scoreEngine = FocusScoreEngine(storageManager: storage, sessionDetector: detector)
             focusScoreEngine = scoreEngine
             borderOverlayController = BorderOverlayWindowController(scoreEngine: scoreEngine)
-            contextRecoveryEngine = ContextRecoveryEngine(
-                storageManager: storage,
-                sessionDetector: detector,
-                llmClient: llmClient,
-                scoreEngine: scoreEngine
-            )
 
             let enrichment = EnrichmentEngine(storageManager: storage, llmClient: llmClient)
             enrichmentEngine = enrichment
@@ -127,7 +120,6 @@ final class ServiceContainer {
             medicationManager = nil
             focusScoreEngine = nil
             borderOverlayController = nil
-            contextRecoveryEngine = nil
             morningPlanEngine = nil
             windDownEngine = nil
             conversationEngine = nil

@@ -107,18 +107,31 @@ struct ReportData {
         return times.sorted { $0.value > $1.value }.map { ($0.key, $0.value) }
     }
 
-    // MARK: Context switch rate (primary app changes / hour)
+    // MARK: Context switch rate (primary app changes per active hour)
+    //
+    // Counts every transition where the dominant app changes between consecutive
+    // summaries, divided by total active recorded time.
+    // Dominant app = the app that appears most in a summary's appNames list.
 
     var switchesPerHour: Double {
         let sorted = summaries.sorted { $0.startTimestamp < $1.startTimestamp }
         var switches = 0
         for i in 1..<sorted.count {
-            let prev = sorted[i - 1].decodedAppNames.first ?? ""
-            let curr = sorted[i].decodedAppNames.first ?? ""
+            let prev = dominantApp(of: sorted[i - 1])
+            let curr = dominantApp(of: sorted[i])
             if !prev.isEmpty && !curr.isEmpty && prev != curr { switches += 1 }
         }
         let hours = totalRecordedSeconds / 3600
         return hours > 0 ? Double(switches) / hours : 0
+    }
+
+    /// App that appears most often in a summary's appNames list.
+    private func dominantApp(of summary: SummaryRecord) -> String {
+        let apps = summary.decodedAppNames
+        guard !apps.isEmpty else { return "" }
+        var counts: [String: Int] = [:]
+        for app in apps { counts[app, default: 0] += 1 }
+        return counts.sorted { $0.value > $1.value }.first?.key ?? apps[0]
     }
 
     // MARK: Activity breakdown

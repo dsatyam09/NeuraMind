@@ -363,7 +363,6 @@ extension StorageManager {
     // MARK: - NeuraMind
 
     /// Most recent summary that includes `appName` and ended before `date`.
-    /// Used by ContextRecoveryEngine to find what the user was last doing before a drift.
     func lastProductiveSummary(for appName: String, before date: Date) throws -> SummaryRecord? {
         try database.dbPool.read { db in
             try SummaryRecord
