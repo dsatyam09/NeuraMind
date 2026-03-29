@@ -569,9 +569,9 @@ struct WorkPatternsTab: View {
 
     enum TimeOfDay: String, CaseIterable {
         case all       = "All Day"
-        case morning   = "Morning (6–12)"
-        case afternoon = "Afternoon (12–18)"
-        case evening   = "Evening (18+)"
+        case morning   = "Morning (6am–12pm)"
+        case afternoon = "Afternoon (12pm–6pm)"
+        case evening   = "Evening (6pm+)"
     }
 
     enum MedicationFilter: String, CaseIterable {
@@ -641,6 +641,14 @@ struct WorkPatternsTab: View {
 
                 Text("\(summaries.count) entries")
                     .font(.caption).foregroundStyle(.secondary)
+
+                Button(action: exportReport) {
+                    Label("Export PDF", systemImage: "arrow.down.doc")
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(summaries.isEmpty)
             }
             .padding(.horizontal, 14).padding(.vertical, 8)
 
@@ -670,21 +678,30 @@ struct WorkPatternsTab: View {
         .onChange(of: medicationFilter)  { _, _ in reload() }
     }
 
-    private func reload() {
+    private func exportReport() {
+        let (start, end) = currentDateRange()
+        let data = ReportData(from: start, to: end, summaries: summaries)
+        ReportEngine.export(data: data)
+    }
+
+    /// Returns the (start, end) dates matching the current timeRange selection.
+    private func currentDateRange() -> (Date, Date) {
         let now = Date()
         let cal = Calendar.current
+        switch timeRange {
+        case .today:
+            return (cal.startOfDay(for: now), now)
+        case .yesterday:
+            let y = cal.date(byAdding: .day, value: -1, to: now)!
+            return (cal.startOfDay(for: y), cal.startOfDay(for: now))
+        case .last7Days:
+            return (cal.date(byAdding: .day, value: -7, to: now)!, now)
+        }
+    }
 
-        let (start, end): (Date, Date) = {
-            switch timeRange {
-            case .today:
-                return (cal.startOfDay(for: now), now)
-            case .yesterday:
-                let y = cal.date(byAdding: .day, value: -1, to: now)!
-                return (cal.startOfDay(for: y), cal.startOfDay(for: now))
-            case .last7Days:
-                return (cal.date(byAdding: .day, value: -7, to: now)!, now)
-            }
-        }()
+    private func reload() {
+        let cal = Calendar.current
+        let (start, end) = currentDateRange()
 
         // Fetch with optional app filter
         let appFilter = selectedApp.isEmpty ? nil : selectedApp

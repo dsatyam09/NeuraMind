@@ -974,3 +974,98 @@ Steps 1–4 are fully independent of the Work Patterns UI changes (steps 5–7).
 - Exporting medication data to health apps (HealthKit, etc.)
 - Per-session medication override (the toggle is a day-level signal, not session-level)
 - LLM-generated interpretation of the comparison stats (the two-column grid is intentionally raw)
+
+---
+---
+
+# Phase 3.6 — Medical PDF Report Export
+
+## Problem
+
+The behavioral data AutoLog collects — focus patterns, app usage, session durations, medication state — is clinically meaningful. A user should be able to hand their doctor a clean, structured document summarizing a day or week of activity. Right now that data is locked inside the app with no way to extract it in a format a clinician can read.
+
+---
+
+## What we're building
+
+An **Export Report** button in the Work Patterns tab. The button respects the currently selected time range (Today / Yesterday / Last 7 days) and generates a PDF structured for clinical review. The user chooses where to save it via the standard macOS Save panel.
+
+No LLM involved — the report is a structured rendering of raw DB data. Fast, offline, deterministic.
+
+---
+
+## Report Structure
+
+```
+NeuraMind Behavioral Activity Report
+Period: [start date] – [end date]          Generated: [timestamp]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SUMMARY
+  Total sessions:         42
+  Total recorded time:    3h 14m
+  Medication days:        On (5) · Off (2)
+  Top apps:               Xcode, Safari, Notion
+  Activity breakdown:     Coding 58% · Research 24% · Admin 18%
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DAILY BREAKDOWN
+
+Monday 24 March 2026  [💊 On medication]
+  09:14–09:19   coding     Editing the Methods section of the paper
+  09:21–09:30   research   Reading about attention mechanisms
+  ...
+
+Tuesday 25 March 2026  [Off medication]
+  10:02–10:10   admin      Responding to emails
+  ...
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+This report was generated automatically by NeuraMind for clinical review.
+Data reflects passive screen activity captured on this device.
+```
+
+---
+
+## PDF Generation
+
+Uses `NSHostingView` wrapping a SwiftUI `MedicalReportView`, then calls `NSView.dataWithPDF(inside:)` to render a proper vector PDF (selectable text, no rasterization). The view is sized to 680pt wide; height is determined by `NSHostingView.fittingSize` after layout.
+
+User flow:
+1. Select time range in Work Patterns (Today / Yesterday / Last 7 Days)
+2. Click **Export Report**
+3. macOS Save panel opens, defaulting to `NeuraMind-Report-YYYY-MM-DD.pdf`
+4. User picks location → PDF written to disk
+
+---
+
+## New Files
+
+| File | What |
+|------|------|
+| `NeuraMind/UI/MedicalReportView.swift` | `ReportData` struct + `ReportEngine` (PDF export) + `MedicalReportView` SwiftUI layout |
+
+## Modified Files
+
+| File | Change |
+|------|--------|
+| `NeuraMind/UI/NeuraMindPanel.swift` | Add Export Report button to WorkPatternsTab browse view |
+
+---
+
+## Implementation Order
+
+1. `MedicalReportView.swift` — build and verify layout in canvas first
+2. Wire `ReportEngine.export()` into the button in `WorkPatternsTab`
+
+---
+
+## Out of scope for Phase 3.6
+
+- LLM-generated narrative summary in the report
+- Charts or graphs (bar charts of focus over time, etc.)
+- Email / sharing sheet integration
+- Custom branding or clinic logo injection
+- Report templates (fixed single format only)
