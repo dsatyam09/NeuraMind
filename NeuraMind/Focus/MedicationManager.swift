@@ -36,7 +36,7 @@ final class MedicationManager: ObservableObject {
 
     /// UserDefaults key — also the source of truth for `currentState` reads
     /// from non-main-actor contexts (actor-safe, no isolation needed).
-    static let defaultsKey = "medicationActive"
+    nonisolated static let defaultsKey = "medicationActive"
 
     init(database: AppDatabase) {
         self.database = database
@@ -89,7 +89,7 @@ final class MedicationManager: ObservableObject {
 
     /// Current medication state read directly from UserDefaults.
     /// Safe to call from any actor context — UserDefaults reads are thread-safe.
-    static var currentState: Bool {
+    nonisolated static var currentState: Bool {
         UserDefaults.standard.bool(forKey: defaultsKey)
     }
 
