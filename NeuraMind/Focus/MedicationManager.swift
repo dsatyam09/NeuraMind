@@ -49,7 +49,7 @@ final class MedicationManager: ObservableObject {
     func toggle() {
         let newState = !isActive
         do {
-            var record = MedicationLogRecord(
+            let record = MedicationLogRecord(
                 id: nil,
                 timestamp: Date().timeIntervalSince1970,
                 isActive: newState

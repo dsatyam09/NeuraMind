@@ -194,10 +194,9 @@ struct ReportData {
 
     var dailySummaryContext: String {
         byDay.map { day, daySummaries, onMed in
-            let dateStr = iso(day)
             let medStr = onMed ? "on medication" : "off medication"
             let lines = daySummaries.prefix(8).map { "  - \($0.summary)" }.joined(separator: "\n")
-            return "\(formatDay(day)) [\(medStr)]:\n\(lines)"
+            return "\(iso(day)) [\(medStr)]:\n\(lines)"
         }.joined(separator: "\n\n")
     }
 
