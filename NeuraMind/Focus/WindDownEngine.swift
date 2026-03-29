@@ -43,12 +43,18 @@ final class WindDownEngine: ObservableObject {
             userMessage += "\n\nMy goals for today were:\n\(goals)"
         }
 
+        let wasOnMedication = MedicationManager.currentState
+        let medicationLine = wasOnMedication
+            ? "The user was on medication today."
+            : "The user was NOT on medication today."
+
         let systemPrompt = """
         You are an ADHD-aware productivity coach helping the user close out their day.
+        \(medicationLine)
         Review their activity and goals (if provided), then give a brief, honest, kind recap.
         Format your response with:
         **Accomplished** (2-3 bullets of what actually got done)
-        **Focus patterns** (what pulled attention, how focused overall)
+        **Focus patterns** (what pulled attention, how focused overall — mention medication context if relevant)
         **Tomorrow** (one sentence — a single intention to carry forward)
         Keep it under 200 words. Be encouraging, not critical.
         """

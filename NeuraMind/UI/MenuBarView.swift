@@ -14,6 +14,7 @@ struct MenuBarView: View {
     var onOpenDebug: () -> Void
 
     // Snapshotted values -- refreshed each time the menu opens.
+    @State private var isMedicated: Bool = false
     @State private var captureCount24h: Int = 0
     @State private var summaryCount24h: Int = 0
     @State private var estimatedCostToday: Double = 0
@@ -34,6 +35,28 @@ struct MenuBarView: View {
             .padding(.horizontal, 16)
             .padding(.top, 14)
             .padding(.bottom, 10)
+
+            // Medication toggle
+            HStack(spacing: 8) {
+                Image(systemName: "pill.fill")
+                    .foregroundStyle(isMedicated ? .blue : Color(nsColor: .tertiaryLabelColor))
+                    .font(.system(size: 12))
+                Text("Medication")
+                    .font(.caption)
+                Spacer()
+                Toggle("", isOn: Binding(
+                    get: { isMedicated },
+                    set: { newValue in
+                        isMedicated = newValue
+                        ServiceContainer.shared.medicationManager?.toggle()
+                    }
+                ))
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                .tint(.blue)
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
 
             if let score = overlayScore {
                 HStack(spacing: 6) {
@@ -135,6 +158,7 @@ struct MenuBarView: View {
 
     /// Capture a fresh snapshot of stats each time the menu opens.
     private func snapshotState() {
+        isMedicated = ServiceContainer.shared.medicationManager?.isActive ?? false
         lastError = captureEngine.lastError
 
         let focusSnapshot = FocusStateStore.currentSnapshot(storageManager: storageManager)

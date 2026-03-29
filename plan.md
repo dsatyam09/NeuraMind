@@ -760,3 +760,217 @@ NeuraMindChatPanel
 - Multi-day planning or weekly reviews
 - Automatic email pull (always manual / user-initiated)
 - Outlook integration (stretch goal — Gmail first)
+
+---
+---
+
+# Phase 3.5 — Medication Mode Toggle + Behavioral Pattern Comparison
+
+## Problem
+
+ADHD medication (Adderall, Ritalin, Concerta, etc.) profoundly affects focus patterns, app-switching behavior, session depth, and work output. But that effect is invisible in the data unless the data knows about it. Right now, AutoLog has no way to distinguish a "good focus day because medicated" from a "good focus day unmedicated" — and no way to surface whether the user actually notices a difference in their own behavior.
+
+This phase adds a single persistent toggle — "I'm on medication today" — and threads that signal through the entire data pipeline so every work pattern, every Wind Down recap, and every summary can be stratified by medication state.
+
+---
+
+## What we're building
+
+**1. `MedicationLog` table** — A new SQLite table that records every toggle event with a timestamp and state. This is a log, not just a single flag, so we can reconstruct the medication state at any point in history.
+
+**2. Medication toggle in the menu bar** — A pill icon button at the top of the menu bar popover. One tap turns it on; another turns it off. State persists across relaunches. Visually distinct: blue tint when on, muted when off.
+
+**3. Medication-aware tagging on summaries** — When `SummarizationEngine` writes a `SummaryRecord`, it looks up the current medication state and writes it into a new `medicationActive: Bool` column. This is stamped at write time so the historical record is accurate even if the user later changes their toggle.
+
+**4. Work Patterns filter** — Add a medication filter to the Phase 3 Work Patterns tab: All / On Medication / Off Medication. Filters the summary list by the `medicationActive` column. No LLM — pure DB query.
+
+**5. Side-by-side pattern comparison** — A new "Compare" sub-view within Work Patterns that computes aggregate metrics for on-medication vs off-medication sessions over the last 30 days and displays them as a simple two-column stat grid. No chart library needed.
+
+**6. Medication context in Wind Down** — When generating the end-of-day recap, pass the day's medication state to Claude so the recap can comment on it: "Today was an unmedicated day — you still averaged 18-minute focus sessions."
+
+---
+
+## Medication Log Schema
+
+New table `medication_log`:
+
+```sql
+CREATE TABLE medication_log (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp   REAL    NOT NULL,   -- Unix epoch, seconds
+    is_active   INTEGER NOT NULL    -- 1 = on medication, 0 = off
+);
+```
+
+Add `medication_active INTEGER NOT NULL DEFAULT 0` column to `summary_records`.
+
+`MedicationManager` — a lightweight `@MainActor` singleton that:
+- Reads the latest row from `medication_log` on init to restore state
+- Exposes `@Published var isActive: Bool`
+- On toggle: inserts a new row into `medication_log` and updates `isActive`
+- Exposes `func state(at date: Date) -> Bool` — walks the log backward to find the active state at a given timestamp (used for backfilling if needed)
+
+```swift
+@MainActor
+final class MedicationManager: ObservableObject {
+    @Published private(set) var isActive: Bool = false
+
+    private let storageManager: StorageManager
+
+    init(storageManager: StorageManager)
+
+    func toggle()                              // insert log row, flip isActive
+    func state(at date: Date) -> Bool          // historical lookup
+}
+```
+
+---
+
+## Menu Bar Toggle
+
+In `MenuBarView.swift`, at the very top of the popover content (above the focus state row from Phase 1):
+
+```swift
+HStack(spacing: 8) {
+    Image(systemName: "pill.fill")
+        .foregroundStyle(medicationManager.isActive ? .blue : .secondary)
+        .font(.system(size: 12))
+    Text("Medication")
+        .font(.caption)
+        .foregroundStyle(.primary)
+    Spacer()
+    Toggle("", isOn: Binding(
+        get: { medicationManager.isActive },
+        set: { _ in medicationManager.toggle() }
+    ))
+    .toggleStyle(.switch)
+    .controlSize(.mini)
+    .tint(.blue)
+}
+.padding(.bottom, 4)
+```
+
+No confirmation dialog — toggling is intentional and the log is append-only so nothing is lost.
+
+---
+
+## Stamping Summaries
+
+In `SummarizationEngine` (or wherever `SummaryRecord` is written), inject `MedicationManager`:
+
+```swift
+let record = SummaryRecord(
+    ...
+    medicationActive: medicationManager.isActive
+)
+```
+
+This means historical summaries retain the medication state that was active when they were generated, regardless of later toggles. Accurate by design.
+
+---
+
+## Work Patterns Filter
+
+Add a `MedicationFilter` enum to the existing filter set in the Work Patterns tab:
+
+```swift
+enum MedicationFilter: String, CaseIterable {
+    case all = "All"
+    case onMedication = "On Medication"
+    case offMedication = "Off Medication"
+}
+```
+
+When filter is `onMedication`: add `.filter(SummaryRecord.Columns.medicationActive == true)` to the GRDB query. When `offMedication`: same with `== false`. When `all`: no filter added. No LLM, no recompute — just a query predicate change.
+
+---
+
+## Side-by-Side Comparison View
+
+A "Compare" sub-tab within Work Patterns. Only shows meaningful data once both medication states have at least 3 days of data (otherwise shows a "not enough data yet" placeholder).
+
+Metrics computed via GRDB aggregates over `summary_records` from the last 30 days, grouped by `medication_active`:
+
+| Metric | How computed |
+|--------|-------------|
+| Avg focus score | Average of `focusScore` column per group |
+| Avg session length | Average duration of sessions per group |
+| Avg daily switches | Count of sessions per day, averaged per group |
+| Top apps | Most frequent `appNames` entries per group |
+| Peak focus time | Hour of day with highest average focus score per group |
+
+Display as a two-column stat grid with a subtle divider:
+
+```
+                    On Medication    Off Medication
+Avg focus score         74%              58%
+Avg session length      22 min           14 min
+Avg daily switches      31               47
+Peak focus time         10am             2pm
+Top apps          Xcode, Linear    Safari, YouTube
+```
+
+No chart library. Pure `LazyVGrid` in SwiftUI. Numbers only — no LLM interpretation at this layer.
+
+---
+
+## Wind Down Integration
+
+Pass medication state to `WindDownEngine` as an additional context field:
+
+```swift
+let wasOnMedication = medicationManager.isActive
+// Include in the Sonnet prompt:
+let medicationLine = wasOnMedication
+    ? "The user was on medication today."
+    : "The user was NOT on medication today."
+```
+
+Append to the Wind Down prompt before the summaries block. Claude will naturally weave this into the recap where relevant — e.g. "Unmedicated today, but you still maintained focus for 3+ hour blocks in the morning."
+
+---
+
+## New Files
+
+| File | What |
+|------|------|
+| `NeuraMind/Focus/MedicationManager.swift` | Toggle logic, `medication_log` reads/writes, historical state lookup |
+| `NeuraMind/UI/MedicationCompareView.swift` | Two-column stat grid comparing on vs off medication sessions |
+
+---
+
+## Modified Files
+
+| File | Change |
+|------|--------|
+| `NeuraMind/Storage/StorageManager.swift` | Add `medication_log` table migration + `SummaryRecord.medicationActive` column |
+| `NeuraMind/UI/MenuBarView.swift` | Add pill toggle at top of popover |
+| `NeuraMind/Focus/SummarizationEngine.swift` | Inject `MedicationManager`, stamp `medicationActive` on each record |
+| `NeuraMind/UI/WorkPatternsView.swift` | Add `MedicationFilter` picker + "Compare" sub-tab |
+| `NeuraMind/Focus/WindDownEngine.swift` | Pass medication state into Sonnet prompt |
+| `NeuraMind/App/ServiceContainer.swift` | Create + wire `MedicationManager` |
+
+---
+
+## Implementation Order
+
+1. `StorageManager.swift` — add `medication_log` table and `medicationActive` column to `summary_records` (migration)
+2. `MedicationManager.swift` — toggle logic, log reads/writes
+3. Wire into `ServiceContainer.swift` and `MenuBarView.swift` — toggle is live
+4. `SummarizationEngine.swift` — stamp medication state on new summaries
+5. `WorkPatternsView.swift` — add medication filter to existing summary list
+6. `MedicationCompareView.swift` — two-column comparison grid
+7. `WindDownEngine.swift` — inject medication context into recap prompt
+
+Steps 1–4 are fully independent of the Work Patterns UI changes (steps 5–7). Can be built in two parallel tracks.
+
+---
+
+## Out of scope for Phase 3.5
+
+- Tracking specific medications or dosages (privacy concern — binary on/off only)
+- Automatic detection of medication state from behavior patterns
+- Medication reminders or scheduling
+- Exporting medication data to health apps (HealthKit, etc.)
+- Per-session medication override (the toggle is a day-level signal, not session-level)
+- LLM-generated interpretation of the comparison stats (the two-column grid is intentionally raw)

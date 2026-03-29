@@ -574,31 +574,68 @@ struct WorkPatternsTab: View {
         case evening   = "Evening (18+)"
     }
 
+    enum MedicationFilter: String, CaseIterable {
+        case all          = "All"
+        case onMedication = "On Meds"
+        case offMedication = "Off Meds"
+    }
+
+    enum SubTab: String, CaseIterable {
+        case browse  = "Browse"
+        case compare = "Compare"
+    }
+
+    @State private var subTab: SubTab = .browse
     @State private var timeRange: TimeRangeOption = .today
     @State private var timeOfDay: TimeOfDay = .all
     @State private var selectedApp: String = ""
+    @State private var medicationFilter: MedicationFilter = .all
     @State private var summaries: [SummaryRecord] = []
     @State private var availableApps: [String] = []
 
     var body: some View {
         VStack(spacing: 0) {
+            // Browse / Compare sub-tab picker
+            Picker("", selection: $subTab) {
+                ForEach(SubTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 6)
+
+            Divider()
+
+            if subTab == .compare {
+                MedicationCompareView(storageManager: storageManager)
+            } else {
+                browseContent
+            }
+        }
+    }
+
+    private var browseContent: some View {
+        VStack(spacing: 0) {
             // Filter bar
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 Picker("", selection: $timeRange) {
                     ForEach(TimeRangeOption.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                 }
-                .pickerStyle(.menu).labelsHidden().frame(width: 120)
+                .pickerStyle(.menu).labelsHidden().frame(width: 110)
 
                 Picker("", selection: $timeOfDay) {
                     ForEach(TimeOfDay.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                 }
-                .pickerStyle(.menu).labelsHidden().frame(width: 155)
+                .pickerStyle(.menu).labelsHidden().frame(width: 148)
 
                 Picker("", selection: $selectedApp) {
                     Text("All Apps").tag("")
                     ForEach(availableApps, id: \.self) { Text($0).tag($0) }
                 }
-                .pickerStyle(.menu).labelsHidden().frame(width: 130)
+                .pickerStyle(.menu).labelsHidden().frame(width: 120)
+
+                Picker("", selection: $medicationFilter) {
+                    ForEach(MedicationFilter.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.menu).labelsHidden().frame(width: 90)
 
                 Spacer()
 
@@ -627,9 +664,10 @@ struct WorkPatternsTab: View {
             }
         }
         .onAppear { reload() }
-        .onChange(of: timeRange)   { _, _ in reload() }
-        .onChange(of: timeOfDay)   { _, _ in reload() }
-        .onChange(of: selectedApp) { _, _ in reload() }
+        .onChange(of: timeRange)         { _, _ in reload() }
+        .onChange(of: timeOfDay)         { _, _ in reload() }
+        .onChange(of: selectedApp)       { _, _ in reload() }
+        .onChange(of: medicationFilter)  { _, _ in reload() }
     }
 
     private func reload() {
@@ -663,6 +701,13 @@ struct WorkPatternsTab: View {
                 case .all:       return true
                 }
             }
+        }
+
+        // Apply medication filter in-process
+        switch medicationFilter {
+        case .onMedication:  all = all.filter { $0.medicationActive }
+        case .offMedication: all = all.filter { !$0.medicationActive }
+        case .all:           break
         }
 
         summaries = all
