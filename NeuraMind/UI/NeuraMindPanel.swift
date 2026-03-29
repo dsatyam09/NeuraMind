@@ -586,6 +586,7 @@ struct WorkPatternsTab: View {
     }
 
     @State private var subTab: SubTab = .browse
+    @State private var isExporting: Bool = false
     @State private var timeRange: TimeRangeOption = .today
     @State private var timeOfDay: TimeOfDay = .all
     @State private var selectedApp: String = ""
@@ -642,13 +643,17 @@ struct WorkPatternsTab: View {
                 Text("\(summaries.count) entries")
                     .font(.caption).foregroundStyle(.secondary)
 
-                Button(action: exportReport) {
-                    Label("Export PDF", systemImage: "arrow.down.doc")
-                        .font(.caption)
+                Button(action: { Task { await exportReport() } }) {
+                    if isExporting {
+                        ProgressView().controlSize(.mini).padding(.trailing, 2)
+                        Text("Generating…").font(.caption)
+                    } else {
+                        Label("Export PDF", systemImage: "arrow.down.doc").font(.caption)
+                    }
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                .disabled(summaries.isEmpty)
+                .disabled(summaries.isEmpty || isExporting)
             }
             .padding(.horizontal, 14).padding(.vertical, 8)
 
@@ -678,10 +683,12 @@ struct WorkPatternsTab: View {
         .onChange(of: medicationFilter)  { _, _ in reload() }
     }
 
-    private func exportReport() {
+    private func exportReport() async {
+        isExporting = true
         let (start, end) = currentDateRange()
         let data = ReportData(from: start, to: end, summaries: summaries)
-        ReportEngine.export(data: data)
+        await ReportEngine.export(data: data)
+        isExporting = false
     }
 
     /// Returns the (start, end) dates matching the current timeRange selection.
