@@ -60,11 +60,19 @@ else
 fi
 ok "Build complete -> $BIN"
 
-# 2. Stop any running instance
+# 2. Stop any running instance and wait for it to exit
 if pgrep -x "$PRODUCT" > /dev/null 2>&1; then
     log "Stopping running $PRODUCT..."
     killall "$PRODUCT" 2>/dev/null || true
-    sleep 0.5
+    for i in $(seq 1 20); do
+        pgrep -x "$PRODUCT" > /dev/null 2>&1 || break
+        sleep 0.2
+    done
+    if pgrep -x "$PRODUCT" > /dev/null 2>&1; then
+        warn "Process still alive after 4s — sending SIGKILL"
+        killall -9 "$PRODUCT" 2>/dev/null || true
+        sleep 0.5
+    fi
 fi
 
 # 3. Assemble .app bundle

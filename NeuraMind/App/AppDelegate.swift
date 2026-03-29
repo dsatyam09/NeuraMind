@@ -9,12 +9,18 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let logger = DualLogger(category: "AppDelegate")
     private var onboardingWindow: NSWindow?
+    private(set) var menuBarController: MenuBarSidePanelController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // LSUIElement apps default to .prohibited activation policy, which prevents
         // windows from coming to the foreground and receiving keyboard input.
         // Set .accessory so windows can be activated on demand while staying out of the Dock.
         NSApp.setActivationPolicy(.accessory)
+
+        // Menu bar icon + side panel — set up first so the icon appears immediately.
+        let controller = MenuBarSidePanelController()
+        controller.setup()
+        menuBarController = controller
 
         NotificationCenter.default.addObserver(
             self,
@@ -38,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func screensDidChange() {
         ServiceContainer.shared.borderOverlayController?.rebuildWindows()
+        menuBarController?.handleScreenChange()
     }
 
     private func showOnboardingWindow() {
